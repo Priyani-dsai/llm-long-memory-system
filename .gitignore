@@ -1,0 +1,7 @@
+__pycache__/
+.env
+*.db
+*.sqlite
+symbolic_memory.db
+.vscode/
+.idea/
