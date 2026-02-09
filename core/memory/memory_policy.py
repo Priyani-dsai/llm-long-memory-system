@@ -1,24 +1,41 @@
 """
 Memory policy module.
 
-Responsible for enforcing user-defined and system-defined
-policies related to memory storage and modification.
+Controls whether memory objects are allowed to be written
+or updated based on active policy rules.
 """
+
+from typing import Dict, List
 
 
 def is_memory_write_allowed(
-    memory_candidate: dict,
-    active_policies: list[dict]
+    memory_candidate: Dict,
+    active_policies: List[Dict]
 ) -> bool:
     """
-    Determines whether a memory object is allowed
-    to be stored or updated based on active memory policies.
+    Determines whether a memory object is allowed to be stored.
 
-    Args:
-        memory_candidate: The memory object being considered.
-        active_policies: List of active memory policy rules.
-
-    Returns:
-        True if the memory write is allowed, False otherwise.
+    Policy examples:
+    - User says "don't remember this"
+    - System policy disables profile storage
     """
-    raise NotImplementedError
+
+    # If no active policies, allow by default
+    if not active_policies:
+        return True
+
+    for policy in active_policies:
+        policy_type = policy.get("policy_type")
+
+        # Explicit memory disable
+        if policy_type == "disable_memory":
+            return False
+
+        # Block profile facts
+        if (
+            policy_type == "disable_profile_memory"
+            and memory_candidate.get("type") == "profile_fact"
+        ):
+            return False
+
+    return True
