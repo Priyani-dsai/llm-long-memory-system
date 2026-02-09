@@ -5,39 +5,31 @@ Defines the structured format produced by the interpreter
 when analyzing a user turn.
 """
 
-from dataclasses import dataclass
-from typing import Dict, Optional
+"""
+Interpreter output schema.
+
+Defines the structure of the object returned by interpret_turn().
+This file contains no logic — schema only.
+"""
 
 
-@dataclass
-class ActionSchema:
-    name: Optional[str]
-    parameters: Dict
-
-
-@dataclass
-class TemporalScopeSchema:
-    type: str
-    value: Optional[str]
-
-
-@dataclass
-class OverrideSignalSchema:
-    explicit: bool
-    target_key: Optional[str]
-
-
-@dataclass
-class MemoryPolicySignalSchema:
-    affects_memory: bool
-    policy_type: Optional[str]
-
-
-@dataclass
-class InterpreterOutput:
-    intent_type: str
-    action: ActionSchema
-    temporal_scope: TemporalScopeSchema
-    override_signal: OverrideSignalSchema
-    memory_policy_signal: MemoryPolicySignalSchema
-    confidence: float
+INTERPRETER_OUTPUT_SCHEMA = {
+    "intent_type": str,
+    "action": {
+        "name": (str, type(None)),
+        "parameters": dict,
+    },
+    "temporal_scope": {
+        "type": str,      # e.g. "global", "date", "task"
+        "value": (str, type(None)),
+    },
+    "override_signal": {
+        "explicit": bool,
+        "target_key": (str, type(None)),
+    },
+    "memory_policy_signal": {
+        "affects_memory": bool,
+        "policy_type": (str, type(None)),
+    },
+    "confidence": float,
+}

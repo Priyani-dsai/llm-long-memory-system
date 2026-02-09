@@ -6,41 +6,64 @@ into structured, machine-readable intent representations.
 """
 
 
+"""
+Minimal interpreter implementation.
+
+This is a deterministic, rule-based interpreter
+used only for end-to-end pipeline validation.
+"""
+
+from typing import Dict, List
+
+
 def interpret_turn(
     user_message: str,
-    recent_turns: list[dict],
+    recent_turns: List[Dict],
     turn_id: int
-) -> dict:
-    """
-    Returns structured interpretation of the user turn.
+) -> Dict:
+    text = user_message.lower()
 
-    Output contract (must always return valid JSON-compatible dict):
+    # ---- Intent detection (very coarse) ----
+    if "prefer" in text:
+        intent_type = "update_preference"
+    elif "call" in text and ("tomorrow" in text or "at" in text):
+        intent_type = "make_commitment"
+    elif "call" in text:
+        intent_type = "perform_action"
+    else:
+        intent_type = "ask_general_question"
 
-    {
-        "intent_type": str,
-        "action": {
-            "name": str | None,
-            "parameters": dict
-        },
-        "temporal_scope": {
-            "type": str,
-            "value": str | None
-        },
-        "override_signal": {
-            "explicit": bool,
-            "target_key": str | None
-        },
-        "memory_policy_signal": {
-            "affects_memory": bool,
-            "policy_type": str | None
-        },
-        "confidence": float
+    # ---- Action detection ----
+    action_name = None
+    if "call" in text:
+        action_name = "call"
+
+    # ---- Temporal scope ----
+    if "tomorrow" in text:
+        temporal_scope = {"type": "date", "value": "tomorrow"}
+    else:
+        temporal_scope = {"type": "global", "value": None}
+
+    # ---- Override detection (not active yet) ----
+    override_signal = {
+        "explicit": False,
+        "target_key": None,
     }
 
-    Notes:
-    - This function MUST NOT return free-form text.
-    - All fields must be present in the returned dict.
-    - Any uncertainty should be reflected via confidence values,
-      not by omitting fields.
-    """
-    raise NotImplementedError
+    # ---- Memory policy signal ----
+    memory_policy_signal = {
+        "affects_memory": intent_type in {"update_preference", "make_commitment"},
+        "policy_type": None,
+    }
+
+    return {
+        "intent_type": intent_type,
+        "action": {
+            "name": action_name,
+            "parameters": {},
+        },
+        "temporal_scope": temporal_scope,
+        "override_signal": override_signal,
+        "memory_policy_signal": memory_policy_signal,
+        "confidence": 0.8,
+    }
