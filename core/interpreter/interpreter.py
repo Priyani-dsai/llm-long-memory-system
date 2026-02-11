@@ -6,14 +6,88 @@ into structured, machine-readable intent representations.
 """
 
 
-"""
-Minimal interpreter implementation.
-
-This is a deterministic, rule-based interpreter
-used only for end-to-end pipeline validation.
-"""
-
+import json
 from typing import Dict, List
+from core.llm.llm_client import call_llm
+from core.interpreter.schema import INTERPRETER_OUTPUT_SCHEMA
+from pathlib import Path
+from typing import List, Dict
+
+MAX_RETRIES = 2
+PROMPT_PATH = Path(__file__).parent / "interpreter_prompt.txt"
+
+
+def _validate_schema(obj: Dict) -> bool:
+    required_keys = INTERPRETER_OUTPUT_SCHEMA.keys()
+    return all(key in obj for key in required_keys)
+
+def _build_prompt(
+    user_message: str,
+    recent_turns: List[Dict]
+) -> str:
+    """
+    Builds the full interpreter prompt.
+    """
+
+    system_prompt = PROMPT_PATH.read_text().strip()
+
+    context_lines = []
+    for turn in recent_turns[-3:]:
+        context_lines.append(f"User: {turn['user']}")
+        context_lines.append(f"Assistant: {turn['assistant']}")
+
+    context_block = "\n".join(context_lines)
+
+    prompt = (
+        f"{system_prompt}\n\n"
+        f"Conversation context:\n"
+        f"{context_block}\n\n"
+        f"User input:\n"
+        f"{user_message}\n\n"
+        f"JSON output:\n"
+    )
+
+    return prompt
+
+def _normalize_interpreter_output(parsed: dict) -> dict:
+    # --- Ensure temporal_scope exists and is valid ---
+    ts = parsed.get("temporal_scope")
+
+    if not isinstance(ts, dict):
+        parsed["temporal_scope"] = {"type": "global", "value": None}
+    else:
+        scope_type = ts.get("type")
+        scope_value = ts.get("value", None)
+
+        if scope_type not in {"global", "date", "task"}:
+            parsed["temporal_scope"] = {"type": "global", "value": None}
+        else:
+            parsed["temporal_scope"] = {
+                "type": scope_type,
+                "value": scope_value
+            }
+
+    # --- Normalize action name ---
+    if parsed.get("action", {}).get("name") in {"prefer", "like", "want"}:
+        parsed["action"]["name"] = None
+
+    # --- Correction logic ---
+    if parsed.get("intent_type") == "correction":
+        parsed["memory_policy_signal"] = {
+            "affects_memory": False,
+            "policy_type": None
+        }
+
+    # --- Ensure memory policy consistency ---
+    mps = parsed.get("memory_policy_signal", {})
+    if not mps.get("affects_memory", False):
+        parsed["memory_policy_signal"] = {
+            "affects_memory": False,
+            "policy_type": None
+        }
+
+    return parsed
+
 
 
 def interpret_turn(
@@ -21,49 +95,31 @@ def interpret_turn(
     recent_turns: List[Dict],
     turn_id: int
 ) -> Dict:
-    text = user_message.lower()
+    """
+    LLM-based interpreter. Authoritative semantic parser.
+    """
+    
+    prompt = _build_prompt(user_message, recent_turns)
 
-    # ---- Intent detection (very coarse) ----
-    if "prefer" in text:
-        intent_type = "update_preference"
-    elif "call" in text and ("tomorrow" in text or "at" in text):
-        intent_type = "make_commitment"
-    elif "call" in text:
-        intent_type = "perform_action"
-    else:
-        intent_type = "ask_general_question"
+    for _ in range(MAX_RETRIES):
+        raw = call_llm(prompt)
 
-    # ---- Action detection ----
-    action_name = None
-    if "call" in text:
-        action_name = "call"
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
 
-    # ---- Temporal scope ----
-    if "tomorrow" in text:
-        temporal_scope = {"type": "date", "value": "tomorrow"}
-    else:
-        temporal_scope = {"type": "global", "value": None}
+        if _validate_schema(parsed):
+            parsed = _normalize_interpreter_output(parsed)
+            print(">>> INTERPRETER OUTPUT:", parsed)
+            return parsed
 
-    # ---- Override detection (not active yet) ----
-    override_signal = {
-        "explicit": False,
-        "target_key": None,
-    }
-
-    # ---- Memory policy signal ----
-    memory_policy_signal = {
-        "affects_memory": intent_type in {"update_preference", "make_commitment"},
-        "policy_type": None,
-    }
-
+    # Hard fallback (safe default)
     return {
-        "intent_type": intent_type,
-        "action": {
-            "name": action_name,
-            "parameters": {},
-        },
-        "temporal_scope": temporal_scope,
-        "override_signal": override_signal,
-        "memory_policy_signal": memory_policy_signal,
-        "confidence": 0.8,
+        "intent_type": "chitchat",
+        "action": {"name": None, "parameters": {}},
+        "temporal_scope": {"type": "global", "value": None},
+        "override_signal": {"explicit": False, "target_key": None},
+        "memory_policy_signal": {"affects_memory": False, "policy_type": None},
+        "confidence": 0.3,
     }

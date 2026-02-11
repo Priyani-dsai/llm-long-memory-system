@@ -16,6 +16,7 @@ def _get_connection() -> sqlite3.Connection:
     """
     Returns a SQLite connection with row-level access.
     """
+    print(">>> DB PATH USED:", DB_PATH)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
@@ -128,6 +129,36 @@ def update_memory(memory_id: str, updates: Dict) -> None:
     conn.commit()
     conn.close()
 
+def find_existing_memory(
+    *,
+    memory_type: str,
+    domain: str,
+    scope: Dict,
+    status: str = "active"
+) -> Dict | None:
+    """
+    Returns an existing memory matching identity, if any.
+    """
+    conn = _get_connection()
+    cursor = conn.cursor()
+
+    query = """
+        SELECT memory_json FROM memories
+        WHERE type = ?
+          AND domain = ?
+          AND status = ?
+    """
+
+    cursor.execute(query, (memory_type, domain, status))
+    rows = cursor.fetchall()
+    conn.close()
+
+    for row in rows:
+        memory = json.loads(row["memory_json"])
+        if memory.get("scope") == scope:
+            return memory
+
+    return None
 
 def fetch_memories(
     *,

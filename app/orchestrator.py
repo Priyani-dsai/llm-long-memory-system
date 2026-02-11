@@ -61,9 +61,45 @@ def process_turn(
         turn_id=turn_id,
     )
 
-    # 3. Store memory candidates
+    from core.memory.memory_store import (
+    store_memory,
+    update_memory,
+    find_existing_memory
+    )
+    from core.memory.memory_policy import (
+    is_memory_write_allowed,
+    decide_memory_write
+    )
+
+    # 3. Store / update memory candidates
     for memory in memory_candidates:
-        store_memory(memory)
+
+     if not is_memory_write_allowed(memory, active_policies=[]):
+        continue
+
+     existing = find_existing_memory(
+        memory_type=memory["type"],
+        domain=memory["domain"],
+        scope=memory["scope"]
+     )
+
+     decision = decide_memory_write(
+        memory_candidate=memory,
+        existing_memory=existing,
+        current_turn=turn_id
+     )
+
+     if decision["action"] == "insert":
+        store_memory(decision["memory"])
+
+     elif decision["action"] == "update":
+        update_memory(
+            memory_id=decision["memory"]["memory_id"],
+            updates=decision["memory"]
+        )
+
+    # ignore → do nothing
+
 
     # 4. Retrieve relevant existing memories
     retrieved_memories = retrieve_memories(
@@ -77,6 +113,8 @@ def process_turn(
         interpreter_output=interpreter_output,
         turn_id=turn_id,
     )
+
+    print(">>> RESOLVED MEMORIES:", resolved_memories)
 
     # 6. Build system context for the LLM
     system_context = build_system_context(resolved_memories)

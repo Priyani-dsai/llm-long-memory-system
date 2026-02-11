@@ -1,11 +1,42 @@
 """
-LLM client module (mock implementation).
-
-Provides a deterministic stand-in for a real LLM,
-used for testing and end-to-end pipeline validation.
+LLM client module
 """
 
+import requests
 from typing import List, Dict
+
+OLLAMA_URL = "http://localhost:11434/api/generate"
+MODEL_NAME = "llama3.1:8b"
+
+
+import time
+
+def call_llm(prompt: str) -> str:
+    payload = {
+        "model": MODEL_NAME,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "temperature": 0.0,
+            "top_p": 0.9,
+        }
+    }
+
+    for attempt in range(2):
+        try:
+            response = requests.post(
+                OLLAMA_URL,
+                json=payload,
+                timeout=180
+            )
+            response.raise_for_status()
+            return response.json()["response"].strip()
+        except requests.exceptions.ReadTimeout:
+            if attempt == 0:
+                time.sleep(2)
+            else:
+                raise
+
 
 
 def generate_response(
@@ -14,33 +45,22 @@ def generate_response(
     user_message: str
 ) -> str:
     """
-    Generates a mock assistant response.
-
-    This implementation is intentionally simple and deterministic.
-    It allows us to verify that:
-    - system rules are injected correctly
-    - short-term context is passed correctly
-    - the pipeline works end-to-end
+    Generates the assistant's natural language response.
     """
 
-    response_lines = []
+    context_lines = []
+    for turn in recent_turns:
+        context_lines.append(f"User: {turn['user']}")
+        context_lines.append(f"Assistant: {turn['assistant']}")
 
-    if system_context:
-        response_lines.append("[SYSTEM RULES APPLIED]")
-        response_lines.append(system_context)
+    context_block = "\n".join(context_lines)
 
-    if recent_turns:
-        response_lines.append("\n[RECENT CONTEXT]")
-        for turn in recent_turns:
-            response_lines.append(f"User: {turn['user']}")
-            response_lines.append(f"Assistant: {turn['assistant']}")
-
-    response_lines.append("\n[USER INPUT]")
-    response_lines.append(user_message)
-
-    response_lines.append("\n[ASSISTANT RESPONSE]")
-    response_lines.append(
-        "Acknowledged. I will respond while respecting the above rules."
+    prompt = (
+        f"You are an assistant.\n\n"
+        f"System rules:\n{system_context}\n\n"
+        f"Conversation so far:\n{context_block}\n\n"
+        f"User: {user_message}\n"
+        f"Assistant:"
     )
 
-    return "\n".join(response_lines)
+    return call_llm(prompt)

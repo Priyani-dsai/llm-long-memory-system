@@ -39,3 +39,50 @@ def is_memory_write_allowed(
             return False
 
     return True
+
+def decide_memory_write(
+    *,
+    memory_candidate: Dict,
+    existing_memory: Dict | None,
+    current_turn: int
+) -> Dict:
+    """
+    Decides whether to insert a new memory or update an existing one.
+
+    Returns a dict:
+    {
+        "action": "insert" | "update" | "ignore",
+        "memory": Dict
+    }
+    """
+
+    # No existing memory → insert
+    if existing_memory is None:
+        return {
+            "action": "insert",
+            "memory": memory_candidate,
+        }
+
+    # Same turn duplicate → ignore
+    if existing_memory.get("origin_turn") == current_turn:
+        return {
+            "action": "ignore",
+            "memory": existing_memory,
+        }
+
+    # Otherwise → update existing memory
+    updated = existing_memory.copy()
+
+    # Confidence reinforcement (simple rule)
+    updated["confidence"] = max(
+        existing_memory.get("confidence", 0.5),
+        memory_candidate.get("confidence", 0.5),
+    )
+
+    updated["last_used_turn"] = current_turn
+
+    return {
+        "action": "update",
+        "memory": updated,
+    }
+

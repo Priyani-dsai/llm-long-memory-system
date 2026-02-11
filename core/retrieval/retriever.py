@@ -51,16 +51,31 @@ def retrieve_memories(
     action_name = interpreter_output.get("action", {}).get("name")
 
     memory_types = INTENT_TO_MEMORY_TYPES.get(intent, [])
-    domains = ACTION_TO_DOMAINS.get(action_name, [])
+    if action_name:
+        domains = ACTION_TO_DOMAINS.get(action_name, [])
+    else:
+        domains = ["general"]
 
     if not memory_types or not domains:
         return []
 
-    candidates = fetch_memories(
-        types=memory_types,
-        domains=domains,
-        status="active",
-    )
+
+    # Fetch domain-specific memories
+    domain_specific = fetch_memories(
+     types=memory_types,
+     domains=domains,
+     status="active"
+)
+
+    # Fetch general memories (domain-agnostic)
+    general = fetch_memories(
+     types=memory_types,
+     domains=["general"],
+     status="active"
+ )
+
+    candidates = domain_specific + general
+
 
     # Apply confidence threshold
     filtered = [
