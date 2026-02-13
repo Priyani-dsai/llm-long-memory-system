@@ -1,41 +1,42 @@
 """
-Evaluation script for Long-Term Memory System.
+Evaluation script for Hybrid Long-Term Memory System.
 
-Runs controlled benchmark conversations and reports:
-- Retrieval correctness
-- Long-range recall
-- Conflict handling
-- Decay behavior
-- Latency
+Benchmarks:
+- Global preference conflict handling
+- Date-based commitment recall
+- Retrieval precision
+- Memory decay
+- Latency measurement
 """
 
 import os
 import time
-import sqlite3
 
-from app.main import process_turn  # adjust if needed
-from core.memory.memory_store import fetch_memories
+from app.orchestrator import process_turn, reset_short_term_context
+from core.memory.memory_store import (
+    fetch_memories,
+    _initialize_db,
+    DB_PATH
+)
 from core.memory.decay_manager import apply_decay
-from core.memory.memory_store import _initialize_db
 
 
-DB_PATH = "storage/symbolic_memory.db"
-
-
-# -------------------------
+# -------------------------------------------------
 # Utility
-# -------------------------
+# -------------------------------------------------
 
 def reset_db():
-    import os
-    from core.memory.memory_store import DB_PATH, _initialize_db
-
+    """
+    Ensures deterministic benchmark execution.
+    Resets DB and short-term context.
+    """
     if os.path.exists(DB_PATH):
         os.remove(DB_PATH)
 
     _initialize_db()
-    print("[✓] Database reset.")
+    reset_short_term_context()
 
+    print("[✓] Database + context reset.")
 
 
 def print_section(title):
@@ -44,10 +45,9 @@ def print_section(title):
     print("=" * 60)
 
 
-# -------------------------
-# Benchmark 1
-# Global Preference Recall
-# -------------------------
+# -------------------------------------------------
+# Benchmark 1 — Preference Conflict
+# -------------------------------------------------
 
 def benchmark_preference_conflict():
     print_section("Benchmark 1 — Global Preference Conflict")
@@ -65,10 +65,9 @@ def benchmark_preference_conflict():
     print("\nLatency:", round(latency, 3), "sec")
 
 
-# -------------------------
-# Benchmark 2
-# Date Commitment Recall
-# -------------------------
+# -------------------------------------------------
+# Benchmark 2 — Long-Range Commitment Recall
+# -------------------------------------------------
 
 def benchmark_commitment_recall():
     print_section("Benchmark 2 — Date Commitment Recall")
@@ -77,9 +76,9 @@ def benchmark_commitment_recall():
     process_turn("Call mom tomorrow.", turn)
     turn += 1
 
-    # simulate filler turns (no memory writes)
+    # Insert noise turns
     for i in range(2, 8):
-        process_turn("Okay.", i)
+        process_turn("Nice weather today.", i)
 
     response = process_turn("What do I have tomorrow?", 8)
 
@@ -87,19 +86,18 @@ def benchmark_commitment_recall():
     print(response)
 
 
-# -------------------------
-# Benchmark 3
-# Retrieval Precision
-# -------------------------
+# -------------------------------------------------
+# Benchmark 3 — Retrieval Precision
+# -------------------------------------------------
 
 def benchmark_retrieval_precision():
     print_section("Benchmark 3 — Retrieval Precision")
 
     turn = 1
-    process_turn("I prefer calling.", turn)
+    process_turn("I prefer calls after 11 AM.", turn)
     turn += 1
 
-    process_turn("I like Italian food.", turn)
+    process_turn("I like Italian food.", turn)  # unrelated preference
     turn += 1
 
     response = process_turn("Schedule a call.", turn)
@@ -114,13 +112,12 @@ def benchmark_retrieval_precision():
         print("-", m["type"], "|", m["domain"])
 
 
-# -------------------------
-# Benchmark 4
-# Decay Simulation
-# -------------------------
+# -------------------------------------------------
+# Benchmark 4 — Decay Simulation
+# -------------------------------------------------
 
 def benchmark_decay():
-    print_section("Benchmark 4 — Decay Simulation")
+    print_section("Benchmark 4 — Memory Decay Simulation")
 
     turn = 1
     process_turn("Call mom tomorrow.", turn)
@@ -128,26 +125,23 @@ def benchmark_decay():
     print("\nBefore Decay:")
     memories = fetch_memories(types=[], domains=[], status="active")
     for m in memories:
-        print("Confidence:", m["confidence"])
+        print("Confidence:", round(m["confidence"], 3))
 
-    # simulate long gap
     apply_decay(current_turn=100)
 
     print("\nAfter Decay to Turn 100:")
     memories = fetch_memories(types=[], domains=[], status="active")
     for m in memories:
-        print("Confidence:", m["confidence"])
+        print("Confidence:", round(m["confidence"], 3))
 
 
-# -------------------------
-# Benchmark 5
-# Latency Measurement
-# -------------------------
+# -------------------------------------------------
+# Benchmark 5 — Latency
+# -------------------------------------------------
 
 def benchmark_latency():
     print_section("Benchmark 5 — Latency")
 
-    turn = 1
     latencies = []
 
     for i in range(1, 6):
@@ -161,23 +155,22 @@ def benchmark_latency():
     print("Average latency:", round(avg, 3), "sec")
 
 
-# -------------------------
+# -------------------------------------------------
 # Main
-# -------------------------
+# -------------------------------------------------
 
 if __name__ == "__main__":
     reset_db()
-
     benchmark_preference_conflict()
-    reset_db()
 
+    reset_db()
     benchmark_commitment_recall()
-    reset_db()
 
+    reset_db()
     benchmark_retrieval_precision()
-    reset_db()
 
+    reset_db()
     benchmark_decay()
-    reset_db()
 
+    reset_db()
     benchmark_latency()

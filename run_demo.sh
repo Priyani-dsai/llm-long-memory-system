@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "=============================================="
-echo "Long-Form Memory System — Demo Run"
+echo "Hybrid Long-Range Memory System — Demo Run"
 echo "=============================================="
 
 echo ""

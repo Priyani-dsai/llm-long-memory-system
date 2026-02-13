@@ -8,18 +8,36 @@ This module contains NO business logic.
 import sqlite3
 import json
 from typing import List, Dict, Optional
+import os
+os.makedirs("storage", exist_ok=True)
+
 
 DB_PATH = "storage/symbolic_memory.db"
 
 
 def _get_connection() -> sqlite3.Connection:
-    """
-    Returns a SQLite connection with row-level access.
-    """
     print(">>> DB PATH USED:", DB_PATH)
+
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS memories (
+            memory_id TEXT PRIMARY KEY,
+            type TEXT,
+            domain TEXT,
+            status TEXT,
+            origin_turn INTEGER,
+            last_used_turn INTEGER,
+            confidence REAL,
+            memory_json TEXT
+        )
+    """)
+    conn.commit()
+
     return conn
+
 
 
 def _initialize_db() -> None:

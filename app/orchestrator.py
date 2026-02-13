@@ -27,10 +27,21 @@ from core.llm.llm_client import generate_response
 from core.memory.decay_manager import apply_decay
 
 
+# -----------------------------
+# Short-term Context (FIFO)
+# -----------------------------
 
-# Short-term context (FIFO)
 _SHORT_TERM_CONTEXT: List[Dict] = []
 MAX_CONTEXT_TURNS = 3
+
+
+def reset_short_term_context() -> None:
+    """
+    Clears short-term conversation buffer.
+    Needed for deterministic benchmarks.
+    """
+    global _SHORT_TERM_CONTEXT
+    _SHORT_TERM_CONTEXT = []
 
 
 def _update_short_term_context(
@@ -48,6 +59,10 @@ def _update_short_term_context(
         _SHORT_TERM_CONTEXT.pop(0)
 
 
+# -----------------------------
+# Main Turn Processor
+# -----------------------------
+
 def process_turn(
     user_message: str,
     turn_id: int
@@ -60,7 +75,7 @@ def process_turn(
         turn_id=turn_id,
     )
 
-    # 2. Extract memory candidates
+    # 2. Extract Memory Candidates
     memory_candidates = extract_memories(
         user_message=user_message,
         interpreter_output=interpreter_output,
@@ -69,8 +84,8 @@ def process_turn(
 
     print(">>> MEMORY CANDIDATES:", memory_candidates)
 
-    # 3. Store / Update memories
-    active_policies = []  # later this can be derived from memory_policy_signal
+    # 3. Store / Update Memories
+    active_policies = []
 
     for memory in memory_candidates:
 
@@ -100,13 +115,12 @@ def process_turn(
 
         # ignore → do nothing
 
-    
-     # 3.5 Apply decay (NEW STEP)
+    # 3.5 Apply decay globally
     apply_decay(current_turn=turn_id)
 
     print(">>> STARTING RETRIEVAL FOR:", interpreter_output)
 
-    # 4. Retrieval
+    # 4. Retrieve
     retrieved_memories = retrieve_memories(
         interpreter_output=interpreter_output,
         turn_id=turn_id,
@@ -119,7 +133,7 @@ def process_turn(
         turn_id=turn_id,
     )
 
-    # 6. Update usage metadata (CRITICAL FIX)
+    # 6. Update last_used_turn
     for memory in resolved_memories:
         update_memory(
             memory_id=memory["memory_id"],
@@ -128,7 +142,7 @@ def process_turn(
 
     print(">>> RESOLVED MEMORIES:", resolved_memories)
 
-    # 7. Injection
+    # 7. Build Injection Context
     system_context = build_system_context(resolved_memories)
 
     # 8. Generate Response
@@ -138,7 +152,7 @@ def process_turn(
         user_message=user_message,
     )
 
-    # 9. Update short-term context
+    # 9. Update Short-Term Context
     _update_short_term_context(
         turn_id=turn_id,
         user_message=user_message,
