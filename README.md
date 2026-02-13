@@ -21,6 +21,9 @@ The system is designed to balance **research rigor** with **engineering practica
 
 ## System Architecture
 
+<img width="1536" height="1024" alt="flow_chart" src="https://github.com/user-attachments/assets/f28811f3-dc88-4aa5-b12f-2dfbd5a1628b" />
+
+
 The memory pipeline consists of:
 
 1. **Interpreter (LLM-based)**
