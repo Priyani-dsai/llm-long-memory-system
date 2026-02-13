@@ -7,32 +7,71 @@ behavior.
 
 # Intent → which memory types are relevant
 INTENT_TO_MEMORY_TYPES = {
+
+    # Immediate actions → need constraints + preferences
     "perform_action": [
         "constraint",
         "exception",
-        "commitment",
-        "instruction",
-        "preference",
-    ],
-    "ask_general_question": [],
-    "update_preference": [
         "preference",
         "instruction",
     ],
+
+    # Confirmed future commitment
     "make_commitment": [
         "constraint",
         "exception",
         "commitment",
     ],
+
+    # Proposed future action → no memory influence yet
+    "proposed_commitment": [],
+
+    # Stable preference update
+    "update_preference": [
+        "preference",
+        "constraint",
+    ],
+
+    # System behavior change
+    "update_instruction": [
+        "instruction",
+    ],
+
+    # Ask about schedule or stored facts
+    "query_information": [
+    "commitment",
+    "constraint",
+    "instruction",
+    "preference"
+    ],
+
+
+    # Correction may affect factual memory
+    "correction": [
+        "commitment",
+        "profile_fact",
+    ],
+
+    # Memory-related instruction
+    "meta_instruction": [
+        "instruction",
+    ],
+
+    # Social
+    "chitchat": [],
 }
+
 
 # Action → semantic domains
 ACTION_TO_DOMAINS = {
-    "call": ["calling", "communication"],
+    "call": ["calling"],
     "message": ["communication"],
+    "pay": ["payment"],
     "schedule": ["planning"],
-    "default": [],
+    "book": ["booking"],
+    "default": ["general"],
 }
+
 
 # Minimum confidence required per memory type
 CONFIDENCE_THRESHOLDS = {
@@ -41,7 +80,7 @@ CONFIDENCE_THRESHOLDS = {
     "commitment": 0.6,
     "instruction": 0.5,
     "preference": 0.4,
-    "profile_fact": 0.8,
+    "profile_fact": 0.6,
 }
 
 # Maximum number of memories retrieved per type

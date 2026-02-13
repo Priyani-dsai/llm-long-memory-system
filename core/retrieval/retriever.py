@@ -1,7 +1,5 @@
 """
 Memory retrieval module.
-
-Selects candidate memories relevant to the current turn.
 """
 
 from typing import List, Dict
@@ -16,19 +14,23 @@ from core.retrieval.retrieval_rules import (
 
 
 def _is_scope_applicable(scope: Dict, interpreter_output: Dict) -> bool:
-    """
-    Determines whether a memory scope applies to the current turn.
-    """
     scope_type = scope.get("type")
+    current_scope = interpreter_output.get("temporal_scope", {})
 
     if scope_type == "global":
         return True
 
     if scope_type == "date":
-        return scope.get("value") == interpreter_output.get("temporal_scope", {}).get("value")
+        return (
+            current_scope.get("type") == "date"
+            and scope.get("value") == current_scope.get("value")
+        )
 
     if scope_type == "task":
-        return scope.get("value") == interpreter_output.get("action", {}).get("name")
+        return (
+            interpreter_output.get("action", {}).get("name")
+            == scope.get("value")
+        )
 
     return False
 
@@ -37,44 +39,66 @@ def retrieve_memories(
     interpreter_output: Dict,
     turn_id: int
 ) -> List[Dict]:
-    """
-    Returns candidate memory objects for the current turn.
 
-    Applies:
-    - intent-based type selection
-    - domain filtering
-    - confidence thresholds
-    - scope applicability
-    - per-type memory limits
-    """
     intent = interpreter_output.get("intent_type")
     action_name = interpreter_output.get("action", {}).get("name")
 
     memory_types = INTENT_TO_MEMORY_TYPES.get(intent, [])
-    domains = ACTION_TO_DOMAINS.get(action_name, [])
 
-    if not memory_types or not domains:
+    if not memory_types:
         return []
 
-    candidates = fetch_memories(
+    # Domain resolution
+    if intent == "query_information":
+    # For queries, do NOT restrict by domain
+        domains = []
+    elif action_name:
+        action_name = action_name.lower().strip()
+        domains = ACTION_TO_DOMAINS.get(action_name, [action_name])
+    else:
+        domains = ["general"]
+
+
+    domain_specific = fetch_memories(
         types=memory_types,
         domains=domains,
-        status="active",
+        status="active"
     )
 
-    # Apply confidence threshold
+    general = fetch_memories(
+        types=memory_types,
+        domains=["general"],
+        status="active"
+    )
+
+    print(">>> DOMAIN SPECIFIC FETCH:", domain_specific)
+    print(">>> GENERAL FETCH:", general)
+
+    # Deduplicate
+    seen = set()
+    candidates = []
+
+    for m in domain_specific + general:
+        if m["memory_id"] not in seen:
+            candidates.append(m)
+            seen.add(m["memory_id"])
+    
+    print(">>> FETCHED RAW CANDIDATES:", candidates)
+
+    # Confidence filter
     filtered = [
         m for m in candidates
-        if m.get("confidence", 0.0) >= CONFIDENCE_THRESHOLDS.get(m.get("type"), 0.0)
+        if m.get("confidence", 0.0)
+        >= CONFIDENCE_THRESHOLDS.get(m.get("type"), 0.0)
     ]
 
-    # Apply scope filtering
+    # Scope filter
     scoped = [
         m for m in filtered
         if _is_scope_applicable(m.get("scope", {}), interpreter_output)
     ]
 
-    # Limit number of memories per type
+    # Per-type limit
     result: List[Dict] = []
     per_type_count = {}
 
