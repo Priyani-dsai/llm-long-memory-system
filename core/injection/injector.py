@@ -1,27 +1,40 @@
 """
 Memory injection module.
-
-Translates resolved memory rules into system-level
-instructions consumable by the LLM.
 """
 
 from typing import List, Dict
 
 
 def _format_constraint(memory: Dict) -> str:
-    return f"You must {memory.get('domain')}."
+    return f"You must strictly follow this constraint: {memory.get('domain')}."
 
 
 def _format_commitment(memory: Dict) -> str:
-    return f"You have committed to {memory.get('domain')}."
+    scope = memory.get("scope", {})
+    domain = memory.get("domain")
+
+    if scope.get("type") == "date" and scope.get("value"):
+        return f"Commitment: You have committed to {domain} on {scope.get('value')}."
+    
+    return f"Commitment: You have committed to {domain}."
 
 
 def _format_instruction(memory: Dict) -> str:
-    return f"You should {memory.get('domain')}."
+    return f"Instruction: You should follow guidance related to {memory.get('domain')}."
 
 
 def _format_preference(memory: Dict) -> str:
-    return f"If possible, you should {memory.get('domain')}."
+    domain = memory.get("domain")
+    scope = memory.get("scope", {})
+
+    if scope.get("type") == "global":
+        return f"User preference: In general, prefer {domain} in accordance with previously stated constraints."
+
+    if scope.get("type") == "date":
+        return f"User preference: For {scope.get('value')}, prefer {domain}."
+
+    return f"User preference related to {domain}."
+
 
 
 FORMATTERS = {
@@ -40,23 +53,20 @@ TYPE_ORDER = [
 ]
 
 
-def build_system_context(
-    resolved_memories: List[Dict]
-) -> str:
-    """
-    Builds system-level instruction text for the LLM
-    from resolved memory rules.
-    """
+def build_system_context(resolved_memories: List[Dict]) -> str:
     if not resolved_memories:
         return ""
 
-    lines: List[str] = []
+    lines: List[str] = [
+        "You must strictly obey the following memory constraints and preferences:"
+    ]
 
     for memory_type in TYPE_ORDER:
         for memory in resolved_memories:
             if memory.get("type") == memory_type:
                 formatter = FORMATTERS.get(memory_type)
                 if formatter:
-                    lines.append(formatter(memory))
+                    lines.append("- " + formatter(memory))
 
     return "\n".join(lines)
+

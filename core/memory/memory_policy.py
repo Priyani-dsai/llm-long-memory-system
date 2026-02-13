@@ -14,24 +14,17 @@ def is_memory_write_allowed(
 ) -> bool:
     """
     Determines whether a memory object is allowed to be stored.
-
-    Policy examples:
-    - User says "don't remember this"
-    - System policy disables profile storage
     """
 
-    # If no active policies, allow by default
     if not active_policies:
         return True
 
     for policy in active_policies:
         policy_type = policy.get("policy_type")
 
-        # Explicit memory disable
         if policy_type == "disable_memory":
             return False
 
-        # Block profile facts
         if (
             policy_type == "disable_profile_memory"
             and memory_candidate.get("type") == "profile_fact"
@@ -40,6 +33,7 @@ def is_memory_write_allowed(
 
     return True
 
+
 def decide_memory_write(
     *,
     memory_candidate: Dict,
@@ -47,36 +41,30 @@ def decide_memory_write(
     current_turn: int
 ) -> Dict:
     """
-    Decides whether to insert a new memory or update an existing one.
-
-    Returns a dict:
-    {
-        "action": "insert" | "update" | "ignore",
-        "memory": Dict
-    }
+    Decides whether to insert, update, or ignore a memory.
     """
 
-    # No existing memory → insert
+    # Insert if no existing memory
     if existing_memory is None:
         return {
             "action": "insert",
             "memory": memory_candidate,
         }
 
-    # Same turn duplicate → ignore
+    # Same-turn duplicate → ignore
     if existing_memory.get("origin_turn") == current_turn:
         return {
             "action": "ignore",
             "memory": existing_memory,
         }
 
-    # Otherwise → update existing memory
+    # Reinforcement update
     updated = existing_memory.copy()
 
-    # Confidence reinforcement (simple rule)
-    updated["confidence"] = max(
-        existing_memory.get("confidence", 0.5),
-        memory_candidate.get("confidence", 0.5),
+    # Gradual confidence reinforcement
+    updated["confidence"] = min(
+        1.0,
+        existing_memory.get("confidence", 0.5) + 0.05
     )
 
     updated["last_used_turn"] = current_turn
@@ -85,4 +73,3 @@ def decide_memory_write(
         "action": "update",
         "memory": updated,
     }
-

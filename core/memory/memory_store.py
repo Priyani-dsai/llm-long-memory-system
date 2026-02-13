@@ -56,6 +56,7 @@ def store_memory(memory: Dict) -> None:
     """
     Persists a new memory object.
     """
+    print(">>> STORING MEMORY OBJECT:", memory)
     conn = _get_connection()
     cursor = conn.cursor()
 
@@ -137,8 +138,10 @@ def find_existing_memory(
     status: str = "active"
 ) -> Dict | None:
     """
-    Returns an existing memory matching identity, if any.
+    Strict identity match:
+    type + domain + scope(type,value) + status
     """
+
     conn = _get_connection()
     cursor = conn.cursor()
 
@@ -153,12 +156,21 @@ def find_existing_memory(
     rows = cursor.fetchall()
     conn.close()
 
+    target_scope_type = scope.get("type")
+    target_scope_value = scope.get("value")
+
     for row in rows:
         memory = json.loads(row["memory_json"])
-        if memory.get("scope") == scope:
+        mem_scope = memory.get("scope", {})
+
+        if (
+            mem_scope.get("type") == target_scope_type
+            and mem_scope.get("value") == target_scope_value
+        ):
             return memory
 
     return None
+
 
 def fetch_memories(
     *,
